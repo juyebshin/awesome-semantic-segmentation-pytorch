@@ -115,13 +115,14 @@ class _DeepLabHead(nn.Module):
 
 
 def get_deeplabv3_plus(dataset='pascal_voc', backbone='xception', pretrained=False, root='~/.torch/models',
-                       pretrained_base=True, **kwargs):
+                       pretrained_base=False, **kwargs): # pretrained_base=True
     acronyms = {
         'pascal_voc': 'pascal_voc',
         'pascal_aug': 'pascal_aug',
         'ade20k': 'ade',
         'coco': 'coco',
         'citys': 'citys',
+        'apollos': 'apollos'
     }
     from ..data.dataloader import datasets
     model = DeepLabV3Plus(datasets[dataset].NUM_CLASS, backbone=backbone, pretrained_base=pretrained_base, **kwargs)

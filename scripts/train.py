@@ -23,11 +23,14 @@ from core.utils.logger import setup_logger
 from core.utils.lr_scheduler import WarmupPolyLR
 from core.utils.score import SegmentationMetric
 
+# juyeb
+import numpy as np
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Semantic Segmentation Training With Pytorch')
     # model and dataset
-    parser.add_argument('--model', type=str, default='fcn',
+    parser.add_argument('--model', type=str, default='deeplabv3_plus',
                         choices=['fcn32s', 'fcn16s', 'fcn8s', 'fcn', 'psp', 'deeplabv3', 
                             'deeplabv3_plus', 'danet', 'denseaspp', 'bisenet', 'encnet', 
                             'dunet', 'icnet', 'enet', 'ocnet', 'psanet', 'cgnet', 'espnet', 
@@ -37,8 +40,8 @@ def parse_args():
                         choices=['vgg16', 'resnet18', 'resnet50', 'resnet101', 'resnet152', 
                             'densenet121', 'densenet161', 'densenet169', 'densenet201'],
                         help='backbone name (default: vgg16)')
-    parser.add_argument('--dataset', type=str, default='pascal_voc',
-                        choices=['pascal_voc', 'pascal_aug', 'ade20k', 'citys', 'sbu'],
+    parser.add_argument('--dataset', type=str, default='apollos',
+                        choices=['pascal_voc', 'pascal_aug', 'ade20k', 'citys', 'sbu', 'apollos'],
                         help='dataset name (default: pascal_voc)')
     parser.add_argument('--base-size', type=int, default=520,
                         help='base image size')
@@ -80,11 +83,11 @@ def parse_args():
     # checkpoint and log
     parser.add_argument('--resume', type=str, default=None,
                         help='put the path to resuming file if needed')
-    parser.add_argument('--save-dir', default='~/.torch/models',
-                        help='Directory for saving checkpoint models')
+    parser.add_argument('--save-dir', default='~/.torch/models', # ./models
+                        help='Directory for saving checkpoint models (default: \'~/.torch/models\'')
     parser.add_argument('--save-epoch', type=int, default=10,
                         help='save model every checkpoint-epoch')
-    parser.add_argument('--log-dir', default='../runs/logs/',
+    parser.add_argument('--log-dir', default='./runs/logs/',
                         help='Directory for saving checkpoint models')
     parser.add_argument('--log-iter', type=int, default=10,
                         help='print log every log-iter')
@@ -166,8 +169,16 @@ class Trainer(object):
                 self.model.load_state_dict(torch.load(args.resume, map_location=lambda storage, loc: storage))
 
         # create criterion
+        ignore_label = 255 # background
         self.criterion = get_segmentation_loss(args.model, use_ohem=args.use_ohem, aux=args.aux,
-                                               aux_weight=args.aux_weight, ignore_index=-1).to(self.device)
+                                               aux_weight=args.aux_weight, ignore_index=ignore_label).to(self.device)
+        # criterion from Intra-KD network
+        # ignore_label = 255 # background
+        # weights = [1.0 for _ in range(37)]
+        # weights[0] = 0.05 # background id: 0
+        # weights[36] = 0.05 # 0.05 # noise id: 249
+        # class_weights = torch.FloatTensor(weights).cuda()
+        # self.criterion = torch.nn.NLLLoss(ignore_index=ignore_label, weight=class_weights).cuda()
 
         # optimizer, for model just includes pretrained, head and auxlayer
         params_list = list()
@@ -215,6 +226,8 @@ class Trainer(object):
             targets = targets.to(self.device)
 
             outputs = self.model(images)
+            # print('output: {out}'.format(out=outputs))
+            # print('targets: {out}'.format(out=targets))
             loss_dict = self.criterion(outputs, targets)
 
             losses = sum(loss for loss in loss_dict.values())
@@ -230,7 +243,15 @@ class Trainer(object):
             eta_seconds = ((time.time() - start_time) / iteration) * (max_iters - iteration)
             eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
 
+            # print('ierations: {:.f}')
+            # print('save to dist: {t}'.format(t=save_to_disk))
             if iteration % log_per_iters == 0 and save_to_disk:
+                # print statistics
+                print(
+                    "Iters: {:d}/{:d} || Lr: {:.6f} || Loss: {:.4f} || Cost Time: {} || Estimated Time: {}".format(
+                        iteration, max_iters, self.optimizer.param_groups[0]['lr'], losses_reduced.item(),
+                        str(datetime.timedelta(seconds=int(time.time() - start_time))), eta_string)
+                )
                 logger.info(
                     "Iters: {:d}/{:d} || Lr: {:.6f} || Loss: {:.4f} || Cost Time: {} || Estimated Time: {}".format(
                         iteration, max_iters, self.optimizer.param_groups[0]['lr'], losses_reduced.item(),

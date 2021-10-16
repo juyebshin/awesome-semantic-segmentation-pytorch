@@ -41,47 +41,59 @@ class SegmentationDataset(object):
         img, mask = self._img_transform(img), self._mask_transform(mask)
         return img, mask
 
-    def _sync_transform(self, img, mask):
+    def _sync_transform(self, img, mask): # transform for train data
         # random mirror
-        if random.random() < 0.5:
-            img = img.transpose(Image.FLIP_LEFT_RIGHT)
-            mask = mask.transpose(Image.FLIP_LEFT_RIGHT)
+        # if random.random() < 0.5: # randomly flip image?
+        #     img = img.transpose(Image.FLIP_LEFT_RIGHT)
+        #     mask = mask.transpose(Image.FLIP_LEFT_RIGHT)
         crop_size = self.crop_size
         # random scale (short edge)
+        # default base_size: 520
         short_size = random.randint(int(self.base_size * 0.5), int(self.base_size * 2.0))
+        # random int in range [260, 1040]
         w, h = img.size
         if h > w:
             ow = short_size
             oh = int(1.0 * h * ow / w)
-        else:
+            # resize the image keeping the ratio h:w 
+        else: # this is the usual case
             oh = short_size
             ow = int(1.0 * w * oh / h)
         img = img.resize((ow, oh), Image.BILINEAR)
         mask = mask.resize((ow, oh), Image.NEAREST)
         # pad crop
+        # default crop_size: 480
         if short_size < crop_size:
+            # pad if rescaled size is smaller than crop_size
             padh = crop_size - oh if oh < crop_size else 0
             padw = crop_size - ow if ow < crop_size else 0
+            # print('img size: {sz}'.format(sz=img.size))
+            # print('mask size: {sz}'.format(sz=mask.size))
             img = ImageOps.expand(img, border=(0, 0, padw, padh), fill=0)
-            mask = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=0)
+            # mask = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=0)
+            mask = ImageOps.expand(mask, border=20, fill=0)
         # random crop crop_size
         w, h = img.size
-        x1 = random.randint(0, w - crop_size)
-        y1 = random.randint(0, h - crop_size)
+        x1 = random.randint(0, w - crop_size) # w - 480
+        y1 = random.randint(0, h - crop_size) # h - 480
         img = img.crop((x1, y1, x1 + crop_size, y1 + crop_size))
         mask = mask.crop((x1, y1, x1 + crop_size, y1 + crop_size))
         # gaussian blur as in PSP
         if random.random() < 0.5:
             img = img.filter(ImageFilter.GaussianBlur(radius=random.random()))
-        # final transform
+        # final transform: from PIL Image to numpy array
         img, mask = self._img_transform(img), self._mask_transform(mask)
+        # print('_sync_transform mask size: {sz}'.format(sz=mask.size))
+        # print('_sync_transform img size: {sz}'.format(sz=img.size))
+        # print(np.unique(mask, return_counts= True))
+        # here img, mask becomes 1d array?
         return img, mask
 
     def _img_transform(self, img):
         return np.array(img)
 
     def _mask_transform(self, mask):
-        return np.array(mask).astype('int32')
+        return np.array(mask).astype('int64')
 
     @property
     def num_class(self):

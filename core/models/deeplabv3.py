@@ -102,8 +102,8 @@ class _AsppPooling(nn.Module):
         return out
 
 
-class _ASPP(nn.Module):
-    def __init__(self, in_channels, atrous_rates, norm_layer, norm_kwargs, **kwargs):
+class _ASPP(nn.Module): # modified
+    def __init__(self, in_channels, atrous_rates, norm_layer, norm_kwargs=None, **kwargs):
         super(_ASPP, self).__init__()
         out_channels = 256
         self.b0 = nn.Sequential(

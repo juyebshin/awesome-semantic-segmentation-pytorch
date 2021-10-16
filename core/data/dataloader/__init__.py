@@ -1,12 +1,14 @@
 """
 This module provides data loaders and transformers for popular vision datasets.
 """
+from core.data.dataloader.apolloscape import ApolloSegmentation
 from .mscoco import COCOSegmentation
 from .cityscapes import CitySegmentation
 from .ade import ADE20KSegmentation
 from .pascal_voc import VOCSegmentation
 from .pascal_aug import VOCAugSegmentation
 from .sbu_shadow import SBUSegmentation
+from .apolloscape import ApolloSegmentation
 
 datasets = {
     'ade20k': ADE20KSegmentation,
@@ -15,6 +17,7 @@ datasets = {
     'coco': COCOSegmentation,
     'citys': CitySegmentation,
     'sbu': SBUSegmentation,
+    'apollos': ApolloSegmentation,
 }
 
 

@@ -102,7 +102,7 @@ class _PSPHead(nn.Module):
 
 
 def get_psp(dataset='pascal_voc', backbone='resnet50', pretrained=False, root='~/.torch/models',
-            pretrained_base=True, **kwargs):
+            pretrained_base=False, **kwargs):
     r"""Pyramid Scene Parsing Network
 
     Parameters
@@ -127,6 +127,7 @@ def get_psp(dataset='pascal_voc', backbone='resnet50', pretrained=False, root='~
         'ade20k': 'ade',
         'coco': 'coco',
         'citys': 'citys',
+        'apollos': 'apollos'
     }
     from ..data.dataloader import datasets
     model = PSPNet(datasets[dataset].NUM_CLASS, backbone=backbone, pretrained_base=pretrained_base, **kwargs)
