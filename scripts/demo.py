@@ -2,6 +2,7 @@ import os
 import sys
 import argparse
 import torch
+import numpy as np
 
 cur_path = os.path.abspath(os.path.dirname(__file__))
 root_path = os.path.split(cur_path)[0]
@@ -16,13 +17,13 @@ parser = argparse.ArgumentParser(
     description='Predict segmentation result from a given image')
 parser.add_argument('--model', type=str, default='fcn32s_vgg16_voc',
                     help='model name (default: fcn32_vgg16)')
-parser.add_argument('--dataset', type=str, default='pascal_aug', choices=['pascal_voc, pascal_aug, ade20k, citys'],
+parser.add_argument('--dataset', type=str, default='pascal_aug', choices=['pascal_voc, pascal_aug, ade20k, citys', 'apollos'],
                     help='dataset name (default: pascal_voc)')
 parser.add_argument('--save-folder', default='~/.torch/models',
                     help='Directory for saving checkpoint models')
 parser.add_argument('--input-pic', type=str, default='../datasets/voc/VOC2012/JPEGImages/2007_000032.jpg',
                     help='path to the input picture')
-parser.add_argument('--outdir', default='./eval', type=str,
+parser.add_argument('--outdir', default='./demo_pic', type=str,
                     help='path to save the predict result')
 parser.add_argument('--local_rank', type=int, default=0)
 args = parser.parse_args()
@@ -40,6 +41,7 @@ def demo(config):
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
     ])
     image = Image.open(config.input_pic).convert('RGB')
+    image = image.crop((0, 1700, image.size[0], image.size[1]))
     images = transform(image).unsqueeze(0).to(device)
 
     model = get_model(args.model, local_rank=args.local_rank, pretrained=True, root=args.save_folder).to(device)
@@ -49,10 +51,14 @@ def demo(config):
     with torch.no_grad():
         output = model(images)
 
+    print(output[0].shape)
     pred = torch.argmax(output[0], 1).squeeze(0).cpu().data.numpy()
+    print(np.unique(pred, return_counts=True))
     mask = get_color_pallete(pred, args.dataset)
     outname = os.path.splitext(os.path.split(args.input_pic)[-1])[0] + '.png'
     mask.save(os.path.join(args.outdir, outname))
+    inname = os.path.splitext(os.path.split(args.input_pic)[-1])[0] + '.jpg'
+    image.save(os.path.join(args.outdir, inname))
 
 
 if __name__ == '__main__':

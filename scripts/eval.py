@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import os
 import sys
+import numpy as np
 
 cur_path = os.path.abspath(os.path.dirname(__file__))
 root_path = os.path.split(cur_path)[0]
@@ -35,7 +36,7 @@ class Evaluator(object):
         ])
 
         # dataset and dataloader
-        val_dataset = get_segmentation_dataset(args.dataset, split='val', mode='testval', transform=input_transform)
+        val_dataset = get_segmentation_dataset(args.dataset, split='train', mode='testval', transform=input_transform)
         val_sampler = make_data_sampler(val_dataset, False, args.distributed)
         val_batch_sampler = make_batch_data_sampler(val_sampler, images_per_batch=1)
         self.val_loader = data.DataLoader(dataset=val_dataset,
@@ -78,6 +79,8 @@ class Evaluator(object):
             if self.args.save_pred:
                 pred = torch.argmax(outputs[0], 1)
                 pred = pred.cpu().data.numpy()
+                print(np.unique(pred, return_counts=True))
+                print(np.unique(target.cpu().data.numpy(), return_counts=True))
 
                 predict = pred.squeeze(0)
                 mask = get_color_pallete(predict, self.args.dataset)
@@ -103,7 +106,7 @@ if __name__ == '__main__':
     # TODO: optim code
     args.save_pred = True
     if args.save_pred:
-        outdir = '../runs/pred_pic/{}_{}_{}'.format(args.model, args.backbone, args.dataset)
+        outdir = './runs/pred_pic/{}_{}_{}'.format(args.model, args.backbone, args.dataset)
         if not os.path.exists(outdir):
             os.makedirs(outdir)
 

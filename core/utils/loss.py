@@ -27,11 +27,16 @@ class MixSoftmaxCrossEntropyLoss(nn.CrossEntropyLoss):
 
     def forward(self, *inputs, **kwargs):
         preds, target = tuple(inputs)
+        # print('in loss.py preds shape: {len}'.format(len=[len(a) for a in preds]))
+        # print('in loss.py target shape: {len}'.format(len=[len(a) for a in target]))
+        # print([len(a) for a in preds])
+        # print([len(a) for a in target])
         inputs = tuple(list(preds) + [target])
         if self.aux:
             return dict(loss=self._aux_forward(*inputs))
         else:
-            return dict(loss=super(MixSoftmaxCrossEntropyLoss, self).forward(*inputs))
+            # same as nn.CrossEntropyLoss.forward
+            return dict(loss=super(MixSoftmaxCrossEntropyLoss, self).forward(*inputs)) 
 
 
 # reference: https://github.com/zhanghang1989/PyTorch-Encoding/blob/master/encoding/nn/loss.py

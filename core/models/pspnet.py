@@ -162,6 +162,9 @@ def get_psp_resnet101_citys(**kwargs):
 def get_psp_resnet101_coco(**kwargs):
     return get_psp('coco', 'resnet101', **kwargs)
 
+def get_psp_resnet101_apollos(**kwargs):
+    return get_psp('apollos', 'resnet101', **kwargs)
+
 
 if __name__ == '__main__':
     model = get_psp_resnet50_voc()

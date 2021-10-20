@@ -141,6 +141,9 @@ class Trainer(object):
         args.iters_per_epoch = len(train_dataset) // (args.num_gpus * args.batch_size)
         args.max_iters = args.epochs * args.iters_per_epoch
 
+        print('Found {:d} train images'.format(train_dataset.__len__()))
+        # train_dataset.__getitem__(0)
+
         train_sampler = make_data_sampler(train_dataset, shuffle=True, distributed=args.distributed)
         train_batch_sampler = make_batch_data_sampler(train_sampler, args.batch_size, args.max_iters)
         val_sampler = make_data_sampler(val_dataset, False, args.distributed)
@@ -170,8 +173,14 @@ class Trainer(object):
 
         # create criterion
         ignore_label = 255 # background
+        weights = [1.0 for _ in range(37)]
+        weights[0] = 0.01 # background id: 0
+        weights[36] = 0.01 # 0.05 # noise id: 249
+        class_weights = torch.FloatTensor(weights).cuda()
         self.criterion = get_segmentation_loss(args.model, use_ohem=args.use_ohem, aux=args.aux,
-                                               aux_weight=args.aux_weight, ignore_index=ignore_label).to(self.device)
+                                               aux_weight=args.aux_weight, ignore_index=ignore_label, weight=class_weights).to(self.device)
+        # self.criterion = torch.nn.CrossEntropyLoss(ignore_index=ignore_label, weight=class_weights).to(self.device)
+
         # criterion from Intra-KD network
         # ignore_label = 255 # background
         # weights = [1.0 for _ in range(37)]
@@ -202,7 +211,7 @@ class Trainer(object):
 
         if args.distributed:
             self.model = nn.parallel.DistributedDataParallel(self.model, device_ids=[args.local_rank],
-                                                             output_device=args.local_rank)
+                                                             output_device=args.local_rank, find_unused_parameters=True)
 
         # evaluation metrics
         self.metric = SegmentationMetric(train_dataset.num_class)
@@ -226,6 +235,7 @@ class Trainer(object):
             targets = targets.to(self.device)
 
             outputs = self.model(images)
+            # outputs = torch.stack(list(outputs)) # tuple to Tensor
             # print('output: {out}'.format(out=outputs))
             # print('targets: {out}'.format(out=targets))
             loss_dict = self.criterion(outputs, targets)
@@ -247,11 +257,11 @@ class Trainer(object):
             # print('save to dist: {t}'.format(t=save_to_disk))
             if iteration % log_per_iters == 0 and save_to_disk:
                 # print statistics
-                print(
-                    "Iters: {:d}/{:d} || Lr: {:.6f} || Loss: {:.4f} || Cost Time: {} || Estimated Time: {}".format(
-                        iteration, max_iters, self.optimizer.param_groups[0]['lr'], losses_reduced.item(),
-                        str(datetime.timedelta(seconds=int(time.time() - start_time))), eta_string)
-                )
+                # print(
+                #     "Iters: {:d}/{:d} || Lr: {:.6f} || Loss: {:.4f} || Cost Time: {} || Estimated Time: {}".format(
+                #         iteration, max_iters, self.optimizer.param_groups[0]['lr'], losses_reduced.item(),
+                #         str(datetime.timedelta(seconds=int(time.time() - start_time))), eta_string)
+                # )
                 logger.info(
                     "Iters: {:d}/{:d} || Lr: {:.6f} || Loss: {:.4f} || Cost Time: {} || Estimated Time: {}".format(
                         iteration, max_iters, self.optimizer.param_groups[0]['lr'], losses_reduced.item(),

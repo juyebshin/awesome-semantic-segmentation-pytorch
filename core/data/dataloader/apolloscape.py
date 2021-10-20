@@ -1,6 +1,6 @@
 import os
 import numpy as np
-import cv2
+# import cv2
 import torch
 
 from PIL import Image
@@ -135,7 +135,7 @@ class ApolloSegmentation(SegmentationDataset):
     >>>     trainset, 4, shuffle=True,
     >>>     num_workers=4)
     """
-    BASE_DIR = '/home/user/data/Dataset/apolloscape/LaneSeg'
+    BASE_DIR = '/home/ubuntu/VDC/Dataset/ApolloScape/LaneSegmentation'
     NUM_CLASS = 37
 
     def __init__(self, root='./list', split='train', mode=None, transform=None, **kwargs):
@@ -143,6 +143,8 @@ class ApolloSegmentation(SegmentationDataset):
         with open(os.path.join(root, split + '.txt'), "r", encoding='utf-8-sig') as f:
             self.img_list = []
             self.label_list = []
+            # for overfitting with 100 images
+            iter = 0
             for line in f:
                 line = line.replace('/home/houyuenan/ApolloScapes', self.BASE_DIR)
                 _img = []
@@ -158,18 +160,22 @@ class ApolloSegmentation(SegmentationDataset):
                 assert os.path.isfile(_label)
                 self.img_list.append(_img)
                 self.label_list.append(_label)
+                # iter += 1
+                # if iter == 10:
+                #     break
 
     def __getitem__(self, index):
         img = Image.open(self.img_list[index]).convert('RGB')
-        img.crop((0, 1700, img.size[0], img.size[1]))
+        img = img.crop((0, 1700, img.size[0], img.size[1]))
         # print('__getitem__ mode: {mode}'.format(mode=self.mode))
         if self.mode == 'test':
             if self.transform is not None:
                 img = self.transform(img)
             return img, os.path.basename(self.img_list[index])
         mask = Image.open(self.label_list[index])
-        mask.crop((0, 1700, mask.size[0], mask.size[1]))
+        mask = mask.crop((0, 1700, mask.size[0], mask.size[1]))
         assert img.size == mask.size
+        # print('cropped mask size: {sz}'.format(sz=mask.size))
         # synchrosized transform
         if self.mode == 'train':
             img, mask = self._sync_transform(img, mask)
@@ -181,10 +187,10 @@ class ApolloSegmentation(SegmentationDataset):
         # general resize, normalize and toTensor
         if self.transform is not None:
             img = self.transform(img)
-        histo = np.unique(mask)
-        # print('unique mask: {un}'.format(un=histo))
-        for x in histo:
-            mask[mask == x] = id2label[x].trainId
+        # histo = np.unique(mask)
+        # # print('unique mask: {un}'.format(un=histo))
+        # for x in histo:
+        #     mask[mask == x] = id2label[x].trainId
         # input_transform = transforms.Compose([
         # transforms.ToTensor(),
         # transforms.Normalize([.485, .456, .406], [.229, .224, .225]),
@@ -195,6 +201,13 @@ class ApolloSegmentation(SegmentationDataset):
 
     def __len__(self):
         return len(self.img_list)
+
+    def _mask_transform(self, mask):
+        target = np.array(mask).astype('int64')
+        histo = np.unique(target)
+        for x in histo:
+            target[target == x] = id2label[x].trainId
+        return target
 
     @property
     def pred_offset(self):

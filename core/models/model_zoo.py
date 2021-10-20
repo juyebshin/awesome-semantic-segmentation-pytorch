@@ -18,6 +18,8 @@ from .espnet import *
 from .lednet import *
 from .dfanet import *
 
+from .pspnet import get_psp_resnet101_apollos
+
 __all__ = ['get_model', 'get_model_list', 'get_segmentation_model']
 
 _models = {
@@ -71,6 +73,7 @@ _models = {
     'espnet_citys': get_espnet_citys,
     'lednet_citys': get_lednet_citys,
     'dfanet_citys': get_dfanet_citys,
+    'psp_resnet101_apollos': get_psp_resnet101_apollos,
 }
 
 
