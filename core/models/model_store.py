@@ -12,10 +12,12 @@ _model_sha1 = {name: checksum for checksum, name in [
     ('25c4b50959ef024fcc050213a06b614899f94b3d', 'resnet50'),
     ('2a57e44de9c853fa015b172309a1ee7e2d0e4e2a', 'resnet101'),
     ('0d43d698c66aceaa2bc0309f55efdd7ff4b143af', 'resnet152'),
+    ('a75c83cfc89a56a4e8ba71b14f1ec67e923787b3', 'resnet50s'),
 ]}
 
-encoding_repo_url = 'https://hangzh.s3.amazonaws.com/'
-_url_format = '{repo_url}encoding/models/{file_name}.zip'
+encoding_repo_url = 'https://s3.us-west-1.wasabisys.com/encoding'
+_url_format = '{repo_url}models/{file_name}.zip'
+
 
 
 def short_hash(name):

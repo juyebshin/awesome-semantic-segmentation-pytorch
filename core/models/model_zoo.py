@@ -19,6 +19,9 @@ from .lednet import *
 from .dfanet import *
 
 from .pspnet import get_psp_resnet101_apollos
+from .pspnet import get_psp_resnet101_apollos_best_model
+from .pspnet import get_psp_resnet50_apollos_best_model
+from .bisenet import get_bisenet_resnet18_apollos
 
 __all__ = ['get_model', 'get_model_list', 'get_segmentation_model']
 
@@ -50,6 +53,7 @@ _models = {
     'denseaspp_densenet169_citys': get_denseaspp_densenet169_citys,
     'denseaspp_densenet201_citys': get_denseaspp_densenet201_citys,
     'bisenet_resnet18_citys': get_bisenet_resnet18_citys,
+    'bisenet_resnet18_apollos': get_bisenet_resnet18_apollos,
     'encnet_resnet50_ade': get_encnet_resnet50_ade,
     'encnet_resnet101_ade': get_encnet_resnet101_ade,
     'encnet_resnet152_ade': get_encnet_resnet152_ade,
@@ -74,6 +78,8 @@ _models = {
     'lednet_citys': get_lednet_citys,
     'dfanet_citys': get_dfanet_citys,
     'psp_resnet101_apollos': get_psp_resnet101_apollos,
+    'psp_resnet101_apollos_best_model': get_psp_resnet101_apollos_best_model,
+    'psp_resnet50_apollos_best_model': get_psp_resnet50_apollos_best_model,
 }
 
 

@@ -102,7 +102,7 @@ class _PSPHead(nn.Module):
 
 
 def get_psp(dataset='pascal_voc', backbone='resnet50', pretrained=False, root='~/.torch/models',
-            pretrained_base=False, **kwargs):
+            pretrained_base=True, **kwargs):
     r"""Pyramid Scene Parsing Network
 
     Parameters
@@ -138,6 +138,43 @@ def get_psp(dataset='pascal_voc', backbone='resnet50', pretrained=False, root='~
                               map_location=device))
     return model
 
+def get_psp_best(dataset='pascal_voc', backbone='resnet50', pretrained=False, root='~/.torch/models',
+            pretrained_base=False, **kwargs):
+    r"""Pyramid Scene Parsing Network
+
+    Parameters
+    ----------
+    dataset : str, default pascal_voc
+        The dataset that model pretrained on. (pascal_voc, ade20k)
+    pretrained : bool or str
+        Boolean value controls whether to load the default pretrained weights for model.
+        String value represents the hashtag for a certain version of pretrained weights.
+    root : str, default '~/.torch/models'
+        Location for keeping the model parameters.
+    pretrained_base : bool or str, default True
+        This will load pretrained backbone network, that was trained on ImageNet.
+    Examples
+    --------
+    >>> model = get_psp(dataset='pascal_voc', backbone='resnet50', pretrained=False)
+    >>> print(model)
+    """
+    acronyms = {
+        'pascal_voc': 'pascal_voc',
+        'pascal_aug': 'pascal_aug',
+        'ade20k': 'ade',
+        'coco': 'coco',
+        'citys': 'citys',
+        'apollos': 'apollos'
+    }
+    from ..data.dataloader import datasets
+    model = PSPNet(datasets[dataset].NUM_CLASS, backbone=backbone, pretrained_base=pretrained_base, **kwargs)
+    if pretrained:
+        from .model_store import get_model_file
+        device = torch.device(kwargs['local_rank'])
+        model.load_state_dict(torch.load(get_model_file('psp_%s_%s_best_model' % (backbone, acronyms[dataset]), root=root),
+                              map_location=device), strict=False)
+    return model
+
 
 def get_psp_resnet50_voc(**kwargs):
     return get_psp('pascal_voc', 'resnet50', **kwargs)
@@ -164,6 +201,12 @@ def get_psp_resnet101_coco(**kwargs):
 
 def get_psp_resnet101_apollos(**kwargs):
     return get_psp('apollos', 'resnet101', **kwargs)
+
+def get_psp_resnet101_apollos_best_model(**kwargs):
+    return get_psp_best('apollos', 'resnet101', **kwargs)
+
+def get_psp_resnet50_apollos_best_model(**kwargs):
+    return get_psp_best('apollos', 'resnet50', **kwargs)
 
 
 if __name__ == '__main__':

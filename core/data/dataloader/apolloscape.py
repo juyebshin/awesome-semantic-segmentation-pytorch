@@ -136,7 +136,7 @@ class ApolloSegmentation(SegmentationDataset):
     >>>     num_workers=4)
     """
     BASE_DIR = '/home/ubuntu/VDC/Dataset/ApolloScape/LaneSegmentation'
-    NUM_CLASS = 37
+    NUM_CLASS = 36
 
     def __init__(self, root='./list', split='train', mode=None, transform=None, **kwargs):
         super(ApolloSegmentation, self).__init__(root, split, mode, transform, **kwargs)
@@ -163,6 +163,7 @@ class ApolloSegmentation(SegmentationDataset):
                 # iter += 1
                 # if iter == 10:
                 #     break
+            print('Found {} images for {}'.format(len(self.img_list), split))
 
     def __getitem__(self, index):
         img = Image.open(self.img_list[index]).convert('RGB')
@@ -174,7 +175,6 @@ class ApolloSegmentation(SegmentationDataset):
             return img, os.path.basename(self.img_list[index])
         mask = Image.open(self.label_list[index])
         mask = mask.crop((0, 1700, mask.size[0], mask.size[1]))
-        assert img.size == mask.size
         # print('cropped mask size: {sz}'.format(sz=mask.size))
         # synchrosized transform
         if self.mode == 'train':
@@ -195,8 +195,9 @@ class ApolloSegmentation(SegmentationDataset):
         # transforms.ToTensor(),
         # transforms.Normalize([.485, .456, .406], [.229, .224, .225]),
         # ])
-        # print('__getitem__ mask size: {sz}'.format(sz=mask.size))
-        # print('__getitem__ img size: {sz}'.format(sz=img.size))
+        # print('__getitem__ mask size: {sz}'.format(sz=mask.shape))
+        # print('__getitem__ img size: {sz}'.format(sz=img.cpu().shape))
+        # assert img.size == mask.size
         return img, mask, os.path.basename(self.img_list[index])
 
     def __len__(self):

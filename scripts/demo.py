@@ -58,6 +58,11 @@ def demo(config):
     outname = os.path.splitext(os.path.split(args.input_pic)[-1])[0] + '.png'
     mask.save(os.path.join(args.outdir, outname))
     inname = os.path.splitext(os.path.split(args.input_pic)[-1])[0] + '.jpg'
+    # new_image = Image.new("RGBA", mask.size, "WHITE")
+    # image = image.convert('RGBA')
+    # mask = mask.convert('RGBA')
+    # mask.paste(image, (0, 0), image)
+    # image = image.convert('RGB')
     image.save(os.path.join(args.outdir, inname))
 
 

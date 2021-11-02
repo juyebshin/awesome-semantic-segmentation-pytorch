@@ -25,7 +25,7 @@ class SegmentationDataset(object):
         w, h = img.size
         if w > h:
             oh = short_size
-            ow = int(3.0 * w * oh / h)
+            ow = int(1.0 * w * oh / h)
         else:
             ow = short_size
             oh = int(1.0 * h * ow / w)
@@ -64,23 +64,25 @@ class SegmentationDataset(object):
         # print('mask shape: {size}'.format(size=mask.size))
         # pad crop
         # default crop_size: 480
-        if short_size < crop_size*3:
+        crop_y = crop_size
+        crop_x = int(1.0*crop_size*w / h)
+        if short_size < crop_size:
             # pad if rescaled size is smaller than crop_size
-            padh = crop_size - oh if oh < crop_size else 0
-            padw = crop_size*3 - ow if ow < crop_size*3 else 0
+            padh = crop_y - oh if oh < crop_y else 0
+            padw = crop_x - ow if ow < crop_x else 0
             # print('img size: {sz}'.format(sz=img.size))
             # print('mask size: {sz}'.format(sz=mask.size))
             # print('pad: {w}, {h}'.format(w=padw, h=padh))
             img = ImageOps.expand(img, border=(0, 0, padw, padh), fill=0)
             # print('mask shape: {size}'.format(size=mask.size))
-            # mask = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=0)
-            mask = ImageOps.expand(mask, fill=0)
+            mask = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=0)
+            # mask = ImageOps.expand(mask, border=20, fill=0)
         # random crop crop_size
         w, h = img.size
-        x1 = random.randint(0, w - crop_size*3) # w - 480
-        y1 = random.randint(0, h - crop_size) # h - 480
-        img = img.crop((x1, y1, x1 + crop_size*3, y1 + crop_size))
-        mask = mask.crop((x1, y1, x1 + crop_size*3, y1 + crop_size))
+        x1 = random.randint(0, w - crop_x) # w - 480
+        y1 = random.randint(0, h - crop_y) # h - 480
+        img = img.crop((x1, y1, x1 + crop_x, y1 + crop_y))
+        mask = mask.crop((x1, y1, x1 + crop_x, y1 + crop_y))
         # gaussian blur as in PSP
         if random.random() < 0.5:
             img = img.filter(ImageFilter.GaussianBlur(radius=random.random()))
