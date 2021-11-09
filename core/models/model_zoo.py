@@ -1,4 +1,5 @@
 """Model store which handles pretrained models """
+from .bisenet import get_bisenet_best
 from .fcn import *
 from .fcnv2 import *
 from .pspnet import *
@@ -22,6 +23,7 @@ from .pspnet import get_psp_resnet101_apollos
 from .pspnet import get_psp_resnet101_apollos_best_model
 from .pspnet import get_psp_resnet50_apollos_best_model
 from .bisenet import get_bisenet_resnet18_apollos
+from .bisenet import get_bisenet_resnet18_apollos_best_model
 
 __all__ = ['get_model', 'get_model_list', 'get_segmentation_model']
 
@@ -54,6 +56,7 @@ _models = {
     'denseaspp_densenet201_citys': get_denseaspp_densenet201_citys,
     'bisenet_resnet18_citys': get_bisenet_resnet18_citys,
     'bisenet_resnet18_apollos': get_bisenet_resnet18_apollos,
+    'bisenet_resnet18_apollos_best_model': get_bisenet_resnet18_apollos_best_model,
     'encnet_resnet50_ade': get_encnet_resnet50_ade,
     'encnet_resnet101_ade': get_encnet_resnet101_ade,
     'encnet_resnet152_ade': get_encnet_resnet152_ade,
@@ -110,6 +113,7 @@ def get_segmentation_model(model, **kwargs):
         'danet': get_danet,
         'denseaspp': get_denseaspp,
         'bisenet': get_bisenet,
+        'bisenet_best': get_bisenet_best,
         'encnet': get_encnet,
         'dunet': get_dunet,
         'icnet': get_icnet,

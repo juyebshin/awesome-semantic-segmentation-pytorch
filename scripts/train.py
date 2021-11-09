@@ -34,7 +34,7 @@ def parse_args():
                         choices=['fcn32s', 'fcn16s', 'fcn8s', 'fcn', 'psp', 'deeplabv3', 
                             'deeplabv3_plus', 'danet', 'denseaspp', 'bisenet', 'encnet', 
                             'dunet', 'icnet', 'enet', 'ocnet', 'psanet', 'cgnet', 'espnet', 
-                            'lednet', 'dfanet'],
+                            'lednet', 'dfanet', 'bisenet_best'],
                         help='model name (default: fcn32s)')
     parser.add_argument('--backbone', type=str, default='resnet50',
                         choices=['vgg16', 'resnet18', 'resnet50', 'resnet101', 'resnet152', 
@@ -96,6 +96,8 @@ def parse_args():
                         help='run validation every val-epoch')
     parser.add_argument('--skip-val', action='store_true', default=False,
                         help='skip validation during training')
+    parser.add_argument('--best', action='store_true', default=False,
+                        help='load best model for evaluation')
     args = parser.parse_args()
 
     # default settings for epochs, batch_size and lr

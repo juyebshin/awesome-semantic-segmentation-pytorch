@@ -206,8 +206,28 @@ def get_bisenet(dataset='citys', backbone='resnet18', pretrained=False, root='~/
     if pretrained:
         from .model_store import get_model_file
         device = torch.device(kwargs['local_rank'])
+        print('local rank: {}'.format(kwargs['local_rank']))
         model.load_state_dict(torch.load(get_model_file('bisenet_%s_%s' % (backbone, acronyms[dataset]), root=root),
                               map_location=device), strict=False)
+    return model
+
+def get_bisenet_best(dataset='citys', backbone='resnet18', pretrained=False, root='~/.torch/models',
+            pretrained_base=True, **kwargs):
+    acronyms = {
+        'pascal_voc': 'pascal_voc',
+        'pascal_aug': 'pascal_aug',
+        'ade20k': 'ade',
+        'coco': 'coco',
+        'citys': 'citys',
+        'apollos': 'apollos',
+    }
+    from ..data.dataloader import datasets
+    model = BiSeNet(datasets[dataset].NUM_CLASS, backbone=backbone, pretrained_base=pretrained_base, **kwargs)
+    if pretrained:
+        from .model_store import get_model_file
+        device = torch.device(kwargs['local_rank'])
+        model.load_state_dict(torch.load(get_model_file('bisenet_%s_%s_best_model' % (backbone, acronyms[dataset]), root=root),
+                                map_location=device), strict=False)
     return model
 
 
@@ -216,6 +236,9 @@ def get_bisenet_resnet18_citys(**kwargs):
 
 def get_bisenet_resnet18_apollos(**kwargs):
     return get_bisenet('apollos', 'resnet18', **kwargs)
+
+def get_bisenet_resnet18_apollos_best_model(**kwargs):
+    return get_bisenet_best('apollos', 'resnet18', **kwargs)
 
 
 if __name__ == '__main__':

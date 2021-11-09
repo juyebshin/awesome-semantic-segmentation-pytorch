@@ -36,7 +36,7 @@ class Evaluator(object):
         ])
 
         # dataset and dataloader
-        val_dataset = get_segmentation_dataset(args.dataset, split='train', mode='testval', transform=input_transform)
+        val_dataset = get_segmentation_dataset(args.dataset, split='val', mode='testval', transform=input_transform)
         val_sampler = make_data_sampler(val_dataset, False, args.distributed)
         val_batch_sampler = make_batch_data_sampler(val_sampler, images_per_batch=1)
         self.val_loader = data.DataLoader(dataset=val_dataset,
@@ -47,9 +47,10 @@ class Evaluator(object):
         # create network
         BatchNorm2d = nn.SyncBatchNorm if args.distributed else nn.BatchNorm2d
         self.model = get_segmentation_model(model=args.model, dataset=args.dataset, backbone=args.backbone,
-                                            aux=args.aux, pretrained=True, pretrained_base=False,
+                                            aux=args.aux, pretrained=True, pretrained_base=True,
                                             local_rank=args.local_rank,
                                             norm_layer=BatchNorm2d).to(self.device)
+        # model = get_model(args.model, local_rank=args.local_rank, pretrained=True, root=args.save_folder).to(self.device)
         if args.distributed:
             self.model = nn.parallel.DistributedDataParallel(self.model,
                 device_ids=[args.local_rank], output_device=args.local_rank)
@@ -104,11 +105,12 @@ if __name__ == '__main__':
         synchronize()
 
     # TODO: optim code
-    args.save_pred = True
-    if args.save_pred:
-        outdir = './runs/pred_pic/{}_{}_{}'.format(args.model, args.backbone, args.dataset)
-        if not os.path.exists(outdir):
-            os.makedirs(outdir)
+    if not args.distributed or (args.distributed and args.local_rank % num_gpus == 0):
+        args.save_pred = True
+        if args.save_pred:
+            outdir = './runs/pred_pic/{}_{}_{}'.format(args.model, args.backbone, args.dataset)
+            if not os.path.exists(outdir):
+                os.makedirs(outdir)
 
     logger = setup_logger("semantic_segmentation", args.log_dir, get_rank(),
                           filename='{}_{}_{}_log.txt'.format(args.model, args.backbone, args.dataset), mode='a+')
