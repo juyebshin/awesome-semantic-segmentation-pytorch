@@ -228,6 +228,7 @@ def get_bisenet_best(dataset='citys', backbone='resnet18', pretrained=False, roo
         device = torch.device(kwargs['local_rank'])
         model.load_state_dict(torch.load(get_model_file('bisenet_%s_%s_best_model' % (backbone, acronyms[dataset]), root=root),
                                 map_location=device), strict=False)
+    
     return model
 
 

@@ -33,6 +33,7 @@ class PSPNet(SegBaseModel):
 
     def __init__(self, nclass, backbone='resnet50', aux=False, pretrained_base=True, **kwargs):
         super(PSPNet, self).__init__(nclass, aux, backbone, pretrained_base=pretrained_base, **kwargs)
+        print('Pretrained base: {}'.format(pretrained_base))
         self.head = _PSPHead(nclass, **kwargs)
         if self.aux:
             self.auxlayer = _FCNHead(1024, nclass, **kwargs)

@@ -22,6 +22,7 @@ from .dfanet import *
 from .pspnet import get_psp_resnet101_apollos
 from .pspnet import get_psp_resnet101_apollos_best_model
 from .pspnet import get_psp_resnet50_apollos_best_model
+from .pspnet import get_psp_best
 from .bisenet import get_bisenet_resnet18_apollos
 from .bisenet import get_bisenet_resnet18_apollos_best_model
 
@@ -108,6 +109,7 @@ def get_segmentation_model(model, **kwargs):
         'fcn8s': get_fcn8s,
         'fcn': get_fcn,
         'psp': get_psp,
+        'psp_best': get_psp_best,
         'deeplabv3': get_deeplabv3,
         'deeplabv3_plus': get_deeplabv3_plus,
         'danet': get_danet,

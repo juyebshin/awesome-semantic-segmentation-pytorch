@@ -44,7 +44,7 @@ class SegmentationMetric(object):
             for (pred, label) in zip(preds, labels):
                 evaluate_worker(self, pred, label)
 
-    def get(self, num_valid=0):
+    def get(self):
         """Gets the current evaluation result.
 
         Returns
@@ -54,10 +54,7 @@ class SegmentationMetric(object):
         """
         pixAcc = 1.0 * self.total_correct / (2.220446049250313e-16 + self.total_label)  # remove np.spacing(1)
         IoU = 1.0 * self.total_inter / (2.220446049250313e-16 + self.total_union)
-        if num_valid:
-            mIoU = IoU.sum().item() / (num_valid-1)
-        else:
-            mIoU = IoU.mean().item()
+        mIoU = IoU.mean().item()
         retIoU = np.array(IoU.cpu())
         return pixAcc, mIoU, retIoU
 

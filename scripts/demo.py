@@ -56,14 +56,16 @@ def demo(config):
     print(np.unique(pred, return_counts=True))
     mask = get_color_pallete(pred, args.dataset)
     outname = os.path.splitext(os.path.split(args.input_pic)[-1])[0] + '.png'
-    mask.save(os.path.join(args.outdir, outname))
+    # mask.save(os.path.join(args.outdir, outname))
     inname = os.path.splitext(os.path.split(args.input_pic)[-1])[0] + '.jpg'
     # new_image = Image.new("RGBA", mask.size, "WHITE")
     # image = image.convert('RGBA')
-    # mask = mask.convert('RGBA')
-    # mask.paste(image, (0, 0), image)
+    mask_gray = mask.convert('L') # to grayscale mask
+    image.paste(mask, (0, 0), mask=mask_gray)
+    # overlay = Image.blend(image, mask, 0.5)
     # image = image.convert('RGB')
-    image.save(os.path.join(args.outdir, inname))
+    # image.save(os.path.join(args.outdir, outname))
+    image.save(os.path.join(args.outdir, outname))
 
 
 if __name__ == '__main__':

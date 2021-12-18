@@ -30,13 +30,13 @@ import numpy as np
 def parse_args():
     parser = argparse.ArgumentParser(description='Semantic Segmentation Training With Pytorch')
     # model and dataset
-    parser.add_argument('--model', type=str, default='deeplabv3_plus',
+    parser.add_argument('--model', type=str, default='bisenet_best',
                         choices=['fcn32s', 'fcn16s', 'fcn8s', 'fcn', 'psp', 'deeplabv3', 
                             'deeplabv3_plus', 'danet', 'denseaspp', 'bisenet', 'encnet', 
                             'dunet', 'icnet', 'enet', 'ocnet', 'psanet', 'cgnet', 'espnet', 
-                            'lednet', 'dfanet', 'bisenet_best'],
+                            'lednet', 'dfanet', 'bisenet_best', 'psp_best'],
                         help='model name (default: fcn32s)')
-    parser.add_argument('--backbone', type=str, default='resnet50',
+    parser.add_argument('--backbone', type=str, default='resnet18',
                         choices=['vgg16', 'resnet18', 'resnet50', 'resnet101', 'resnet152', 
                             'densenet121', 'densenet161', 'densenet169', 'densenet201'],
                         help='backbone name (default: vgg16)')
@@ -49,6 +49,10 @@ def parse_args():
                         help='crop image size')
     parser.add_argument('--workers', '-j', type=int, default=4,
                         metavar='N', help='dataloader threads')
+    parser.add_argument('--dilate', action='store_true', default=True,
+                        help='Dilate label image')
+    parser.add_argument('--bloss', action='store_true', default=True,
+                        help='Use boundary aware focal loss as in SwiftNet')
     # training hyper params
     parser.add_argument('--jpu', action='store_true', default=False,
                         help='JPU')
@@ -58,7 +62,7 @@ def parse_args():
                         help='Auxiliary loss')
     parser.add_argument('--aux-weight', type=float, default=0.4,
                         help='auxiliary loss weight')
-    parser.add_argument('--batch-size', type=int, default=4, metavar='N',
+    parser.add_argument('--batch-size', type=int, default=12, metavar='N',
                         help='input batch size for training (default: 8)')
     parser.add_argument('--start_epoch', type=int, default=0,
                         metavar='N', help='start epochs (default:0)')
@@ -83,11 +87,11 @@ def parse_args():
     # checkpoint and log
     parser.add_argument('--resume', type=str, default=None,
                         help='put the path to resuming file if needed')
-    parser.add_argument('--save-dir', default='~/.torch/models', # ./models
+    parser.add_argument('--save-dir', default='~/.torch/models/bloss/', # ./models
                         help='Directory for saving checkpoint models (default: \'~/.torch/models\'')
-    parser.add_argument('--save-epoch', type=int, default=10,
+    parser.add_argument('--save-epoch', type=int, default=1,
                         help='save model every checkpoint-epoch')
-    parser.add_argument('--log-dir', default='./runs/logs/',
+    parser.add_argument('--log-dir', default='./runs/logs/bloss/',
                         help='Directory for saving checkpoint models')
     parser.add_argument('--log-iter', type=int, default=10,
                         help='print log every log-iter')
@@ -137,7 +141,7 @@ class Trainer(object):
             transforms.Normalize([.485, .456, .406], [.229, .224, .225]),
         ])
         # dataset and dataloader
-        data_kwargs = {'transform': input_transform, 'base_size': args.base_size, 'crop_size': args.crop_size}
+        data_kwargs = {'transform': input_transform, 'base_size': args.base_size, 'crop_size': args.crop_size, 'dilate': args.dilate, 'bloss': args.bloss}
         train_dataset = get_segmentation_dataset(args.dataset, split='train', mode='train', **data_kwargs)
         val_dataset = get_segmentation_dataset(args.dataset, split='val', mode='val', **data_kwargs)
         args.iters_per_epoch = len(train_dataset) // (args.num_gpus * args.batch_size)
@@ -179,8 +183,12 @@ class Trainer(object):
         weights[0] = 0.01 # background id: 0
         weights[36] = 0.01 # 0.05 # noise id: 249
         class_weights = torch.FloatTensor(weights).cuda()
-        self.criterion = get_segmentation_loss(args.model, use_ohem=args.use_ohem, aux=args.aux,
-                                               aux_weight=args.aux_weight, ignore_index=ignore_label, weight=class_weights).to(self.device)
+        if args.bloss:
+            self.criterion = get_segmentation_loss(args.model, bloss=True, gamma=0.5, num_classes=train_dataset.num_class, ignore_id=ignore_label, 
+            print_each=args.log_iter).to(self.device)
+        else:
+            self.criterion = get_segmentation_loss(args.model, use_ohem=args.use_ohem, aux=args.aux,
+                                               aux_weight=args.aux_weight, ignore_index=ignore_label, bloss=args.bloss).to(self.device)
         # self.criterion = torch.nn.CrossEntropyLoss(ignore_index=ignore_label, weight=class_weights).to(self.device)
 
         # criterion from Intra-KD network
@@ -229,52 +237,102 @@ class Trainer(object):
         logger.info('Start training, Total Epochs: {:d} = Total Iterations {:d}'.format(epochs, max_iters))
 
         self.model.train()
-        for iteration, (images, targets, _) in enumerate(self.train_loader):
-            iteration = iteration + 1
-            self.lr_scheduler.step()
+        if args.bloss:
+            for iteration, (images, targets, dist_alphas, _) in enumerate(self.train_loader):
+                iteration = iteration + 1
+                self.lr_scheduler.step()
 
-            images = images.to(self.device)
-            targets = targets.to(self.device)
+                images = images.to(self.device)
+                targets = targets.to(self.device)
 
-            outputs = self.model(images)
-            # outputs = torch.stack(list(outputs)) # tuple to Tensor
-            # print('output: {out}'.format(out=outputs))
-            # print('targets: {out}'.format(out=targets))
-            loss_dict = self.criterion(outputs, targets)
+                outputs = self.model(images)
+                # outputs = torch.stack(list(outputs)) # tuple to Tensor
+                # print('output: {out}'.format(out=outputs))
+                # print('targets: {out}'.format(out=targets))
+                # print('prediction tuple length: {}'.format([len(a) for a in outputs]))
+                # print('prediction tensors size: {}'.format([a.size() for a in outputs]))
+                losses = self.criterion(outputs, targets, dist_alphas) # *inputs -> pred, target
+                # print('loss dict: {}'.format(loss_dict))
+                
+                # losses = sum(loss for loss in loss_dict.values())
+                # reduce losses over all GPUs for logging purposes
+                # loss_dict_reduced = reduce_loss_dict(loss_dict)
+                # losses_reduced = sum(loss for loss in loss_dict_reduced.values())
 
-            losses = sum(loss for loss in loss_dict.values())
+                self.optimizer.zero_grad()
+                losses.backward()
+                self.optimizer.step()
 
-            # reduce losses over all GPUs for logging purposes
-            loss_dict_reduced = reduce_loss_dict(loss_dict)
-            losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+                eta_seconds = ((time.time() - start_time) / iteration) * (max_iters - iteration)
+                eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
 
-            self.optimizer.zero_grad()
-            losses.backward()
-            self.optimizer.step()
+                # print('ierations: {:.f}')
+                # print('save to dist: {t}'.format(t=save_to_disk))
+                if iteration % log_per_iters == 0 and save_to_disk:
+                    # print statistics
+                    # print(
+                    #     "Iters: {:d}/{:d} || Lr: {:.6f} || Loss: {:.4f} || Cost Time: {} || Estimated Time: {}".format(
+                    #         iteration, max_iters, self.optimizer.param_groups[0]['lr'], losses_reduced.item(),
+                    #         str(datetime.timedelta(seconds=int(time.time() - start_time))), eta_string)
+                    # )
+                    logger.info(
+                        "Iters: {:d}/{:d} || Lr: {:.6f} || Loss: {:.4f} || Cost Time: {} || Estimated Time: {}".format(
+                            iteration, max_iters, self.optimizer.param_groups[0]['lr'], losses.item(),
+                            str(datetime.timedelta(seconds=int(time.time() - start_time))), eta_string))
 
-            eta_seconds = ((time.time() - start_time) / iteration) * (max_iters - iteration)
-            eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
+                if iteration % save_per_iters == 0 and save_to_disk:
+                    save_checkpoint(self.model, self.args, is_best=False)
 
-            # print('ierations: {:.f}')
-            # print('save to dist: {t}'.format(t=save_to_disk))
-            if iteration % log_per_iters == 0 and save_to_disk:
-                # print statistics
-                # print(
-                #     "Iters: {:d}/{:d} || Lr: {:.6f} || Loss: {:.4f} || Cost Time: {} || Estimated Time: {}".format(
-                #         iteration, max_iters, self.optimizer.param_groups[0]['lr'], losses_reduced.item(),
-                #         str(datetime.timedelta(seconds=int(time.time() - start_time))), eta_string)
-                # )
-                logger.info(
-                    "Iters: {:d}/{:d} || Lr: {:.6f} || Loss: {:.4f} || Cost Time: {} || Estimated Time: {}".format(
-                        iteration, max_iters, self.optimizer.param_groups[0]['lr'], losses_reduced.item(),
-                        str(datetime.timedelta(seconds=int(time.time() - start_time))), eta_string))
+                if not self.args.skip_val and iteration % val_per_iters == 0:
+                    self.validation()
+                    self.model.train()
+        else:
+            for iteration, (images, targets, _) in enumerate(self.train_loader):
+                iteration = iteration + 1
+                self.lr_scheduler.step()
 
-            if iteration % save_per_iters == 0 and save_to_disk:
-                save_checkpoint(self.model, self.args, is_best=False)
+                images = images.to(self.device)
+                targets = targets.to(self.device)
 
-            if not self.args.skip_val and iteration % val_per_iters == 0:
-                self.validation()
-                self.model.train()
+                outputs = self.model(images)
+                # outputs = torch.stack(list(outputs)) # tuple to Tensor
+                # print('output: {out}'.format(out=outputs))
+                # print('targets: {out}'.format(out=targets))
+                loss_dict = self.criterion(outputs, targets) # *inputs -> pred, target
+                # print('loss dict: {}'.format(loss_dict))
+                
+                losses = sum(loss for loss in loss_dict.values())
+                # reduce losses over all GPUs for logging purposes
+                loss_dict_reduced = reduce_loss_dict(loss_dict)
+                losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+
+                self.optimizer.zero_grad()
+                losses.backward()
+                self.optimizer.step()
+
+                eta_seconds = ((time.time() - start_time) / iteration) * (max_iters - iteration)
+                eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
+
+                # print('ierations: {:.f}')
+                # print('save to dist: {t}'.format(t=save_to_disk))
+                if iteration % log_per_iters == 0 and save_to_disk:
+                    # print statistics
+                    # print(
+                    #     "Iters: {:d}/{:d} || Lr: {:.6f} || Loss: {:.4f} || Cost Time: {} || Estimated Time: {}".format(
+                    #         iteration, max_iters, self.optimizer.param_groups[0]['lr'], losses_reduced.item(),
+                    #         str(datetime.timedelta(seconds=int(time.time() - start_time))), eta_string)
+                    # )
+                    logger.info(
+                        "Iters: {:d}/{:d} || Lr: {:.6f} || Loss: {:.4f} || Cost Time: {} || Estimated Time: {}".format(
+                            iteration, max_iters, self.optimizer.param_groups[0]['lr'], losses_reduced.item(),
+                            str(datetime.timedelta(seconds=int(time.time() - start_time))), eta_string))
+
+                if iteration % save_per_iters == 0 and save_to_disk:
+                    save_checkpoint(self.model, self.args, is_best=False)
+
+                if not self.args.skip_val and iteration % val_per_iters == 0:
+                    self.validation()
+                    self.model.train()
 
         save_checkpoint(self.model, self.args, is_best=False)
         total_training_time = time.time() - start_time
@@ -293,15 +351,26 @@ class Trainer(object):
             model = self.model
         torch.cuda.empty_cache()  # TODO check if it helps
         model.eval()
-        for i, (image, target, filename) in enumerate(self.val_loader):
-            image = image.to(self.device)
-            target = target.to(self.device)
+        if args.bloss:
+            for i, (image, target, _, filename) in enumerate(self.val_loader):
+                image = image.to(self.device)
+                target = target.to(self.device)
 
-            with torch.no_grad():
-                outputs = model(image)
-            self.metric.update(outputs[0], target)
-            pixAcc, mIoU = self.metric.get()
-            logger.info("Sample: {:d}, Validation pixAcc: {:.3f}, mIoU: {:.3f}".format(i + 1, pixAcc, mIoU))
+                with torch.no_grad():
+                    outputs = model(image)
+                self.metric.update(outputs[0], target)
+                pixAcc, mIoU, _ = self.metric.get()
+                logger.info("Sample: {:d}, Validation pixAcc: {:.3f}, mIoU: {:.3f}".format(i + 1, pixAcc, mIoU))
+        else:
+            for i, (image, target, filename) in enumerate(self.val_loader):
+                image = image.to(self.device)
+                target = target.to(self.device)
+
+                with torch.no_grad():
+                    outputs = model(image)
+                self.metric.update(outputs[0], target)
+                pixAcc, mIoU = self.metric.get()
+                logger.info("Sample: {:d}, Validation pixAcc: {:.3f}, mIoU: {:.3f}".format(i + 1, pixAcc, mIoU))
 
         new_pred = (pixAcc + mIoU) / 2
         if new_pred > self.best_pred:

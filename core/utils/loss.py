@@ -3,10 +3,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# Juyeb Shin boundary loss 2021-12-02
+import cv2
+import numpy as np
+from torchvision.transforms import Compose, ToTensor
+
 from torch.autograd import Variable
 
 __all__ = ['MixSoftmaxCrossEntropyLoss', 'MixSoftmaxCrossEntropyOHEMLoss',
            'EncNetLoss', 'ICNetLoss', 'get_segmentation_loss']
+
 
 
 # TODO: optim function
@@ -26,12 +32,14 @@ class MixSoftmaxCrossEntropyLoss(nn.CrossEntropyLoss):
         return loss
 
     def forward(self, *inputs, **kwargs):
-        preds, target = tuple(inputs)
-        # print('in loss.py preds shape: {len}'.format(len=[len(a) for a in preds]))
+        preds, target = tuple(inputs) # preds: 1d tuple
+        print('in loss.py preds shape: {len}'.format(len=[len(a) for a in preds]))
+        # print('size preds: {}'.format(preds.size()))
         # print('in loss.py target shape: {len}'.format(len=[len(a) for a in target]))
         # print([len(a) for a in preds])
         # print([len(a) for a in target])
         inputs = tuple(list(preds) + [target])
+        print('in crossentropy inputs length: {}'.format([len(a) for a in inputs]))
         if self.aux:
             return dict(loss=self._aux_forward(*inputs))
         else:
@@ -187,9 +195,12 @@ class MixSoftmaxCrossEntropyOHEMLoss(OhemCrossEntropy2d):
             return dict(loss=super(MixSoftmaxCrossEntropyOHEMLoss, self).forward(*inputs))
 
 
-def get_segmentation_loss(model, use_ohem=False, **kwargs):
+def get_segmentation_loss(model, use_ohem=False, bloss=False, **kwargs):
     if use_ohem:
         return MixSoftmaxCrossEntropyOHEMLoss(**kwargs)
+    
+    if bloss:
+        return BoundaryAwareFocalLoss(**kwargs)
 
     model = model.lower()
     if model == 'encnet':
@@ -198,3 +209,157 @@ def get_segmentation_loss(model, use_ohem=False, **kwargs):
         return ICNetLoss(**kwargs)
     else:
         return MixSoftmaxCrossEntropyLoss(**kwargs)
+
+
+
+
+class BoundaryAwareFocalLoss(nn.Module):
+    def __init__(self, gamma=0, num_classes=19, ignore_id=19, print_each=20):
+        super(BoundaryAwareFocalLoss, self).__init__()
+        self.num_classes = num_classes
+        self.ignore_id = ignore_id
+        self.print_each = print_each
+        self.step_counter = 0
+        self.gamma = gamma
+
+    def forward(self, input, target, dist, **kwargs):
+        input = torch.stack(list(input), dim=0)
+        input = input.squeeze(0)
+        # if input.shape[-2:] != target.shape[-2:]:
+        #     input = upsample(input, target.shape[-2:])
+        target[target == self.ignore_id] = 0  # we can do this because alphas are zero in ignore_id places
+        label_distance_alphas = dist.to(input.device)
+        # print('label_distance size: {}'.format(label_distance_alphas.size()))
+        N = (label_distance_alphas.data > 0.).sum()
+        # print('input size: {}'.format(input.size()))
+        # print('target size: {}'.format(target.size()))
+        # print('dist size: {}'.format(dist.size()))
+        if N.le(0):
+            return torch.zeros(size=(0,), device=label_distance_alphas.device, requires_grad=True).sum()
+        if input.dim() > 2:
+            input = input.view(input.size(0), input.size(1), -1)  # N,C,H,W => N,C,H*W
+            input = input.transpose(1, 2)  # N,C,H*W => N,H*W,C
+            input = input.contiguous().view(-1, input.size(2))  # N,H*W,C => N*H*W,C
+        target = target.view(-1, 1)
+        alphas = label_distance_alphas.view(-1)
+
+        logpt = F.log_softmax(input, dim=-1)
+        logpt = logpt.gather(1, target)
+        logpt = logpt.view(-1)
+        pt = logpt.detach().exp()
+
+        loss = -1 * alphas * torch.exp(self.gamma * (1 - pt)) * logpt
+        loss = loss.sum() / N
+
+        if (self.step_counter % self.print_each) == 0:
+            print(f'Step: {self.step_counter} Loss: {loss.data.cpu().item():.4f}')
+        self.step_counter += 1
+
+        return loss
+
+
+# class LabelDistanceTransform:
+#     def __init__(self, num_classes, bins=(4, 16, 64, 128), alphas=(8., 6., 4., 2., 1.), reduce=False,
+#                  ignore_id=19):
+#         self.num_classes = num_classes
+#         self.reduce = reduce
+#         self.bins = bins
+#         self.alphas = alphas
+#         self.ignore_id = ignore_id
+
+#     def __call__(self, example):
+#         labels = np.array(example.cpu())
+#         # for k in mapId2TrainId:
+#         #   labels[example == k] = mapId2TrainId[k]
+#         present_classes = np.unique(labels)
+#         print('labels size: {}'.format(labels.shape))
+#         print('present_classes: {}'.format(present_classes))
+#         # distances: [num_class, batch_size, h, w]
+#         distances = np.zeros([self.num_classes] + list(labels.shape), dtype=np.float32) - 1.
+#         print('distances shape: {}'.format(distances.shape))
+#         for i in range(self.num_classes):
+#             if i not in present_classes:
+#                 continue
+#             class_mask = labels == i
+#             print('class mask size: {}'.format(class_mask.shape))
+#             # print('distances[i][class_mask]: {}'.format(distances[i][class_mask]))
+#             distances[i][class_mask] = cv2.distanceTransform(np.uint8(class_mask), cv2.DIST_L2, maskSize=5)[class_mask]
+            
+#         if self.reduce:
+#             ignore_mask = labels == self.ignore_id
+#             distances[distances < 0] = 0
+#             distances = distances.sum(axis=0)
+#             label_distance_bins = np.digitize(distances, self.bins)
+#             label_distance_alphas = np.zeros(label_distance_bins.shape, dtype=np.float32)
+#             for idx, alpha in enumerate(self.alphas):
+#                 label_distance_alphas[label_distance_bins == idx] = alpha
+#             label_distance_alphas[ignore_mask] = 0
+#             distance_alphas = label_distance_alphas
+#         else:
+#             distance_alphas = distances
+#         return distance_alphas
+
+# class BoundaryAwareFocalLoss(nn.Module):
+#     def __init__(self, gamma=0, num_classes=19, ignore_id=19, print_each=20):
+#         super(BoundaryAwareFocalLoss, self).__init__()
+#         self.num_classes = num_classes
+#         self.ignore_id = ignore_id
+#         self.print_each = print_each
+#         self.step_counter = 0
+#         self.gamma = gamma
+
+#         self.transform = Compose(
+#             [LabelDistanceTransform(num_classes=self.num_classes, bins=(8, 16, 32), alphas=(8., 4., 2., 1.), reduce=True, ignore_id=0),
+#             ToTensor(),])
+
+#     def forward(self, input, target, **kwargs):
+#         # input: tuple (batch_size) of Tensor (image)
+#         # if input.shape[-2:] != target.shape[-2:]:
+#         #     input = upsample(input, target.shape[-2:])
+#         _input = input[0].clone().detach()
+#         losses = 0
+#         dist_alphas = torch.zeros(input[0].size(),)
+#         for b in range(target.shape[0]): # for batch_size
+#             _target = torch.tensor(target[b].clone().detach())
+#             _target[_target == self.ignore_id] = 0  # we can do this because alphas are zero in ignore_id places
+#             dist_alphas[b] = self.transform(_target)
+#         # dist_alphas = self.transform(target)
+#         label_distance_alphas = dist_alphas.to(_input.device)
+#         print('label_distance size: {}'.format(label_distance_alphas.size()))
+#         N = (label_distance_alphas.data > 0.).sum()
+#         if N.le(0):
+#             return torch.zeros(size=(0,), device=label_distance_alphas.device, requires_grad=True).sum()
+#         if _input.dim() > 2:
+#             _input = _input.view(_input.size(0), _input.size(1), -1)  # N,C,H,W => N,C,H*W
+#             _input = _input.transpose(1, 2)  # N,C,H*W => N,H*W,C
+#             _input = _input.contiguous().view(-1, _input.size(2))  # N,H*W,C => N*H*W,C
+#         # one hot encoding
+#         target = target.unsqueeze(1)
+#         one_hot = torch.LongTensor(target.size(0), self.num_classes, target.size(2), target.size(3)).to(target.device).zero_()
+#         target = one_hot.scatter_(1, target.data, 1)
+#         print('target scatter_ size: {}'.format(target.size()))
+#         if target.dim() > 2:
+#             target = target.view(target.size(0), target.size(1), -1)  # N,C,H,W => N,C,H*W
+#             target = target.transpose(1, 2)  # N,C,H*W => N,H*W,C
+#             target = target.contiguous().view(-1, target.size(2))  # N,H*W,C => N*H*W,C
+#         # target = target.view(-1, 1)
+#         alphas = label_distance_alphas.view(-1)
+
+#         print('_input size: {}'.format(_input.size()))
+#         print('target size: {}'.format(target.size()))
+#         logpt = F.log_softmax(_input, dim=-1)
+#         print('logpt size: {}'.format(logpt.size()))
+#         logpt = logpt.gather(1, target)
+#         logpt = logpt.view(-1)
+#         pt = logpt.detach().exp()
+
+#         print('alphas size: {}'.format(alphas.size()))
+#         loss = -1 * alphas * torch.exp(self.gamma * (1 - pt)) * logpt
+#         loss = loss.sum() / N
+#             # losses += loss
+
+#         if (self.step_counter % self.print_each) == 0:
+#             print(f'Step: {self.step_counter} Loss: {loss.data.cpu().item():.4f}')
+#         self.step_counter += 1
+
+#         return loss

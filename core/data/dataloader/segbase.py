@@ -10,7 +10,7 @@ __all__ = ['SegmentationDataset']
 class SegmentationDataset(object):
     """Segmentation Base Dataset"""
 
-    def __init__(self, root, split, mode, transform, base_size=520, crop_size=480):
+    def __init__(self, root, split, mode, transform, base_size=520, crop_size=480, dilate=False, bloss=False):
         super(SegmentationDataset, self).__init__()
         self.root = root
         self.transform = transform
@@ -18,6 +18,8 @@ class SegmentationDataset(object):
         self.mode = mode if mode is not None else split
         self.base_size = base_size
         self.crop_size = crop_size
+        self.dilate = dilate
+        self.bloss = bloss
 
     def _val_sync_transform(self, img, mask):
         outsize = self.crop_size
@@ -31,7 +33,7 @@ class SegmentationDataset(object):
             oh = int(1.0 * h * ow / w)
         img = img.resize((ow, oh), Image.BILINEAR)
         mask = mask.resize((ow, oh), Image.NEAREST)
-        # center crop
+        # center crop why?
         w, h = img.size
         x1 = int(round((w - outsize*3) / 2.))
         y1 = int(round((h - outsize) / 2.))

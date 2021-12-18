@@ -3,7 +3,6 @@ from __future__ import print_function
 import os
 import sys
 import numpy as np
-from PIL import Image
 
 cur_path = os.path.abspath(os.path.dirname(__file__))
 root_path = os.path.split(cur_path)[0]
@@ -67,37 +66,18 @@ class Evaluator(object):
         else:
             model = self.model
         logger.info("Start validation, Total sample: {:d}".format(len(self.val_loader)))
-
-        # saving class histogram in validation set
-        # eval_hist = np.zeros(self.val_loader.dataset.num_class)
-        # eval_list = []
-        # import csv
-        # from core.data.dataloader.apolloscape import labels
-        # for label in labels:
-        #     if label.trainId == 255:
-        #         continue
-        #     eval_list.append(label.name)
-
+        avg_mIoU = 0
         for i, (image, target, filename) in enumerate(self.val_loader):
             image = image.to(self.device)
             target = target.to(self.device)
-
-            # for analysis, save all class histogram in validation set
-            # label_hist, label_count = np.unique(np.array(target.cpu()), return_counts=True) # returns tuple of lists
-            # print('label_hist shape: {}, {}'.format(label_hist.shape, label_count.shape))
-            # print('label_hist: {}'.format(label_hist))
-            # for idx, cnt in zip(label_hist, label_count):
-            #     if idx == 255:
-            #         continue
-            #     eval_hist[idx] += cnt
-            #     print('{}, {}'.format(idx, cnt))
-
-            print('input image shape: {}'.format(image.shape))
+            num_valid = len(torch.unique(target))
+            # print('input image shape: {}'.format(image.shape))
 
             with torch.no_grad():
                 outputs = model(image)
             self.metric.update(outputs[0], target)
-            pixAcc, mIoU, IoU = self.metric.get()
+            pixAcc, mIoU, IoU = self.metric.get(num_valid)
+            avg_mIoU += mIoU
             logger.info("Sample: {:d}, validation pixAcc: {:.3f}, mIoU: {:.3f}".format(
                 i + 1, pixAcc * 100, mIoU * 100))
             np.set_printoptions(precision=2, suppress=True)
@@ -111,28 +91,19 @@ class Evaluator(object):
 
                 predict = pred.squeeze(0)
                 mask = get_color_pallete(predict, self.args.dataset)
-                # mask.save(os.path.join(outdir, os.path.splitext(filename[0])[0] + '.png'))
-
-                # save input and target
-                # npimage = image.cpu().data.numpy().squeeze(0)
-                # nptarget = target.cpu().data.numpy().squeeze(0)
-
-                # image_save = Image.fromarray(npimage, 'RGB')
-                # target_save = get_color_pallete(nptarget, self.args.dataset)
-
-                # image_save.save(os.path.join(color_dir, os.path.splitext(filename[0])[0] + '.jpg'))
-                # target_save.save(os.path.join(label_dir, os.path.splitext(filename[0])[0] + '.png'))
+                mask.save(os.path.join(outdir, os.path.splitext(filename[0])[0] + '.png'))
+        avg_mIoU /= 1000
+        print(avg_mIoU*100, "%")
         synchronize()
-
-        # with open('val_list.csv', 'w') as f:
-        #     write = csv.writer(f)
-        #     for name, cnt in zip(eval_list, eval_hist):
-        #         print('row: {}'.format([name, cnt]))
-        #         write.writerow([name, cnt])
 
 
 if __name__ == '__main__':
     args = parse_args()
+    args.model = 'bisenet_best'
+    args.backbone = 'resnet18'
+    args.dataset = 'apollos'
+    args.log_dir = '~/runs/logs/dilate_bloss/'
+    args.save_dir = '~/.torch/models/bloss/'
     num_gpus = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
     args.distributed = num_gpus > 1
     if not args.no_cuda and torch.cuda.is_available():
@@ -157,15 +128,6 @@ if __name__ == '__main__':
             # outdir = './runs/pred_pic/{}_{}_{}'.format(args.model, args.backbone, args.dataset)
             if not os.path.exists(outdir):
                 os.makedirs(outdir)
-            # dir to save input and target image
-            # color_dir = './runs/pred_pic/{}_{}_{}/color/'.format(args.model, args.backbone, args.dataset)
-            # label_dir = './runs/pred_pic/{}_{}_{}/label/'.format(args.model, args.backbone, args.dataset)
-
-            # if not os.path.exists(color_dir):
-            #     os.makedirs(color_dir)
-            # if not os.path.exists(label_dir):
-            #     os.makedirs(label_dir)
-
 
     print('log file is saved to: {}'.format(args.log_dir))
     logger = setup_logger("semantic_segmentation", args.log_dir, get_rank(),
